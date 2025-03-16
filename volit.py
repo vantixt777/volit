@@ -5,6 +5,12 @@ import socket
 import threading
 from colorama import init, Fore, Style
 import os
+from pystyle import Colors, Colorate
+import smtplib
+import dns.resolver
+import time
+import concurrent.futures
+import whois
 
 # Initialize color output
 init(autoreset=True)
@@ -15,109 +21,10 @@ reset = "\033[0m"
 yellow = "\033[93m"
 green = "\033[92m"
 
-# Function to get IP information
-def get_ip_info(ip):
-    url = f"https://ipinfo.io/{ip}/json"
-    try:
-        response = requests.get(url)
-        return response.json()
-    except requests.RequestException as e:
-        return {"error": str(e)}
-
-# Function to get phone number information
-def get_phone_info(phone_number):
-    try:
-        parsed_number = phonenumbers.parse(phone_number)
-        if phonenumbers.is_valid_number(parsed_number):
-            country = geocoder.description_for_number(parsed_number, "en")
-            provider = carrier.name_for_number(parsed_number, "en")
-            timezones = timezone.time_zones_for_number(parsed_number)
-
-            phone_info_banner = f"""
-{red}\033[1mPhone Number Info:{reset}
-Phone Number: {phone_number}
-  - Country: {country}
-  - Carrier: {provider}
-  - Timezones: {', '.join(timezones)}
-"""
-            print(phone_info_banner)
-        else:
-            print("Invalid phone number.")
-    except phonenumbers.phonenumberutil.NumberParseException:
-        print("Error parsing the phone number.")
-
-# Function to get MAC address information
-def get_mac_info(mac_address):
-    url = f"https://api.macvendors.com/{mac_address}"
-    try:
-        response = requests.get(url)
-        if response.status_code == 200:
-            print(f"The MAC address {mac_address} belongs to:")
-            print(response.text)
-        else:
-            print(f"{red}[!] Error: No information found for MAC address {mac_address}.{reset}")
-    except requests.exceptions.RequestException as e:
-        print(f"{red}[!] Error fetching data: {e}{reset}")
-
-# Username check
-PLATFORMS = [
-    'github.com', 'twitter.com', 'instagram.com', 'facebook.com', 'linkedin.com',
-    'pinterest.com', 'twitch.tv', 'youtube.com', 'reddit.com', 'snapchat.com',
-    'tumblr.com', 'steamcommunity.com', 'aniworld.com', 'discord.com', 'guns.lol'
-]
-
-def check_username_on_platform(username, platform):
-    url = f'https://{platform}/{username}'
-    response = requests.get(url)
-    
-    if response.status_code == 404:
-        print(f'{green}[✔] {platform} - {username} is available! Link: {url}')
-    elif response.status_code == 200:
-        print(f'{red}[✘] {platform} - {username} is taken! Link: {url}')
-    else:
-        print(f'{yellow}[?] {platform} - Error checking username.')
-
-def search_username(username):
-    print(f'\nChecking username: {username}')
-    
-    for platform in PLATFORMS:
-        check_username_on_platform(username, platform)
-
-# Port scanner
-def scan_port(ip, port, show_closed=False):
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(1)
-        result = sock.connect_ex((ip, port))
-
-        if result == 0:
-            print(Fore.GREEN + f"  [+] Port {port} is open ✅")
-        elif show_closed:
-            print(Fore.RED + f"  [-] Port {port} is closed ❌")
-
-        sock.close()
-    except socket.error as err:
-        print(Fore.YELLOW + f"  [!] Error scanning port {port}: {err}")
-
-def scan_ports(ip, start_port, end_port, show_closed=False):
-    print(Fore.MAGENTA + f"📡 Scanning {ip} from port {start_port} to {end_port}...\n")
-    threads = []
-    for port in range(start_port, end_port + 1):
-        thread = threading.Thread(target=scan_port, args=(ip, port, show_closed))
-        threads.append(thread)
-        thread.start()
-        if len(threads) >= 100:
-            for t in threads:
-                t.join()
-            threads = []
-
-    for thread in threads:
-        thread.join()
-
-# Print banner
+# Function to print banner
 def print_banner():
-    os.system("clear" if os.name == "posix" else "cls")  # Clear screen
-    banner = f"""{red}\033[1m
+    os.system("clear" if os.name == "posix" else "cls")
+    interface = """
  ▄█    █▄        ▄██████▄        ▄█             ▄█           ███     
 ███    ███      ███    ███      ███            ███       ▀█████████▄ 
 ███    ███      ███    ███      ███            ███▌         ▀███▀▀██ 
@@ -126,53 +33,198 @@ def print_banner():
 ███    ███      ███    ███      ███            ███           ███     
 ███    ███      ███    ███      ███▌    ▄      ███           ███     
  ▀██████▀        ▀██████▀       █████▄▄██      █▀           ▄████▀   
-                                ▀                                        
+    """
+    print(Colorate.Horizontal(Colors.blue_to_purple, interface))
 
-    ╔════════════════════════════════════╗
-    ║          [1] IP Scan               ║
-    ║          [2] Username Scan         ║
-    ║          [3] Phone Number Info     ║
-    ║          [4] MAC Address Scan      ║
-    ║          [5] Port Scanner          ║
-    ╚════════════════════════════════════╝
+# Function to print menu inside a box with the same color as the banner
+def print_menu():
+    menu = Colorate.Horizontal(Colors.blue_to_purple, """
+╔══════════════════════════════╗
+║          MENU OPTIONS        ║
+╠══════════════════════════════╣
+║ 1. Find Email                ║
+║ 2. Get IP Information        ║
+║ 3. Get Phone Number Info     ║
+║ 4. Scan Ports                ║
+║ 5. Check Username            ║
+║ 6. Get MAC Address Info      ║
+║ 7. Reverse IP Lookup         ║
+║ 8. WHOIS Lookup              �
+╚══════════════════════════════╝
 
-              by vantixt
-{reset}"""
-    print(banner)
+           by vantixt
+""")
+    print(menu)
+
+# Function to find email
+def find_email():
+    first_name = input("Enter first name: ").strip().lower()
+    last_name = input("Enter last name (optional): ").strip().lower()
+    domains = ["gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "aol.com", "protonmail.com", "icloud.com", "zoho.com", "yandex.com", "gmx.com", "mail.com"]
+    formats = [
+        f"{first_name}.{last_name}", f"{first_name}{last_name}",
+        f"{first_name}_{last_name}", f"{first_name[0]}{last_name}",
+        f"{last_name}.{first_name}", f"{first_name}-{last_name}",
+        f"{first_name}{last_name[0]}", f"{first_name[0]}_{last_name}"
+    ] if last_name else [first_name, f"{first_name}123", f"{first_name}99"]
+    
+    emails = [f"{fmt}@{domain}" for fmt in formats for domain in domains]
+    
+    print(f"{green}Possible emails:{reset}")
+    for email in emails:
+        print(email)
+
+# Function to get IP information
+def get_ip_info(ip):
+    try:
+        url = f"http://ip-api.com/json/{ip}"
+        response = requests.get(url)
+        data = response.json()
+        
+        if data["status"] == "success":
+            print(f"{green}IP Information for {ip}:{reset}")
+            print(f"Country: {data.get('country', 'N/A')}")
+            print(f"Region: {data.get('regionName', 'N/A')}")
+            print(f"City: {data.get('city', 'N/A')}")
+            print(f"ISP: {data.get('isp', 'N/A')}")
+            print(f"Organization: {data.get('org', 'N/A')}")
+            print(f"AS: {data.get('as', 'N/A')}")
+            print(f"Latitude: {data.get('lat', 'N/A')}")
+            print(f"Longitude: {data.get('lon', 'N/A')}")
+            print(f"Timezone: {data.get('timezone', 'N/A')}")
+            print(f"ZIP: {data.get('zip', 'N/A')}")
+        else:
+            print(f"{red}Failed to fetch IP information. Error: {data.get('message', 'Unknown error')}{reset}")
+    except Exception as e:
+        print(f"{red}Error fetching IP information: {e}{reset}")
+
+# Function to get phone number information
+def get_phone_info(phone):
+    try:
+        parsed_number = phonenumbers.parse(phone)
+        location = geocoder.description_for_number(parsed_number, "en")
+        carrier_name = carrier.name_for_number(parsed_number, "en")
+        time_zones = timezone.time_zones_for_number(parsed_number)
+        
+        print(f"{green}Phone Number Information:{reset}")
+        print(f"Location: {location}")
+        print(f"Carrier: {carrier_name}")
+        print(f"Time Zones: {', '.join(time_zones)}")
+    except Exception as e:
+        print(f"{red}Invalid phone number. Error: {e}{reset}")
+
+# Function to scan ports
+def scan_ports(ip, start_port=1, end_port=1024):
+    print(f"Scanning {ip} from port {start_port} to {end_port}...")
+    open_ports = []
+    
+    def scan(port):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(1)
+            if sock.connect_ex((ip, port)) == 0:
+                open_ports.append(port)
+                print(f"{green}Port {port} is open{reset}")
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
+        executor.map(scan, range(start_port, end_port + 1))
+    
+    if not open_ports:
+        print(f"{red}No open ports found.{reset}")
+
+# Reverse IP Lookup
+def reverse_ip_lookup(ip):
+    url = f"https://api.hackertarget.com/reverseiplookup/?q={ip}"
+    try:
+        response = requests.get(url)
+        print(f"{green}Domains associated with {ip}:{reset}\n{response.text}")
+    except requests.RequestException as e:
+        print(f"{red}Error: {e}{reset}")
+
+# WHOIS Lookup
+def whois_lookup(domain):
+    try:
+        info = whois.whois(domain)
+        print(f"{green}WHOIS Info for {domain}:{reset}\n{info}")
+    except Exception as e:
+        print(f"{red}Error fetching WHOIS data: {e}{reset}")
+
+# Function to check username availability
+def check_username(username):
+    websites = {
+        "GitHub": f"https://github.com/{username}",
+        "Twitter": f"https://twitter.com/{username}",
+        "Instagram": f"https://instagram.com/{username}",
+        "Reddit": f"https://reddit.com/user/{username}",
+        "YouTube": f"https://youtube.com/{username}",
+        "Twitch": f"https://twitch.tv/{username}",
+        "Pinterest": f"https://pinterest.com/{username}",
+        "Tumblr": f"https://{username}.tumblr.com",
+        "Steam": f"https://steamcommunity.com/id/{username}",
+        "Vimeo": f"https://vimeo.com/{username}",
+        "SoundCloud": f"https://soundcloud.com/{username}",
+        "Flickr": f"https://flickr.com/people/{username}",
+        "Dribbble": f"https://dribbble.com/{username}",
+        "Medium": f"https://medium.com/@{username}",
+        "DeviantArt": f"https://{username}.deviantart.com",
+        "VK": f"https://vk.com/{username}",
+        "About.me": f"https://about.me/{username}",
+        "Disqus": f"https://disqus.com/by/{username}",
+        "Flipboard": f"https://flipboard.com/@{username}",
+        "Slack": f"https://{username}.slack.com",
+        "Goodreads": f"https://goodreads.com/{username}",
+        "Patreon": f"https://patreon.com/{username}",
+        "Bitbucket": f"https://bitbucket.org/{username}",
+        "GitLab": f"https://gitlab.com/{username}",
+        "Keybase": f"https://keybase.io/{username}",
+        "Codepen": f"https://codepen.io/{username}",
+        "Behance": f"https://behance.net/{username}",
+        "Foursquare": f"https://foursquare.com/{username}",
+        "HubPages": f"https://hubpages.com/@{username}",
+    }
+
+    print(f"{green}Checking username availability for '{username}':{reset}")
+    for site, url in websites.items():
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                print(f"{red}[X] {site}: {url} (Username taken){reset}")
+            elif response.status_code == 404:
+                print(f"{green}[✓] {site}: {url} (Username available){reset}")
+            else:
+                print(f"{yellow}[?] {site}: {url} (Status code: {response.status_code}){reset}")
+        except requests.RequestException as e:
+            print(f"{yellow}[?] {site}: {url} (Error: {e}){reset}")
 
 # Main menu
 def main():
     print_banner()
-
-    choice = input(f"{red}\nPlease select an option (1, 2, 3, 4, or 5): {reset}")
-
+    print_menu()
+    choice = input(f"{red}\nPlease select an option (1-8): {reset}")
     if choice == "1":
-        ip_address = input(f"{yellow}\nEnter an IP address: {reset}")
-        ip_info = get_ip_info(ip_address)
-        print(ip_info)
-
+        find_email()
     elif choice == "2":
-        username = input(f"{yellow}\nEnter a username: {reset}")
-        search_username(username)
-
+        ip = input("Enter IP address: ")
+        get_ip_info(ip)
     elif choice == "3":
-        phone_number = input(f"{yellow}\nEnter a phone number: {reset}")
-        get_phone_info(phone_number)
-
+        phone = input("Enter phone number: ")
+        get_phone_info(phone)
     elif choice == "4":
-        mac_address = input(f"{yellow}\nEnter a MAC address (XX:XX:XX:XX:XX:XX): {reset}")
-        if len(mac_address) == 17 and mac_address.count(':') == 5:
-            get_mac_info(mac_address)
-        else:
-            print(f"{red}[!] Invalid MAC address format.{reset}")
-
+        ip = input("Enter IP address: ")
+        scan_ports(ip)
     elif choice == "5":
-        target_ip = input(Fore.CYAN + "🌍 Enter the IP address: ")
-        start_port = int(input(Fore.CYAN + "🔢 Start Port: "))
-        end_port = int(input(Fore.CYAN + "🔢 End Port: "))
-        show_closed = input(Fore.YELLOW + "👀 Show closed ports? (y/n): ").strip().lower() == 'y'
-        scan_ports(target_ip, start_port, end_port, show_closed)
-        print(Fore.CYAN + "\n✅ Scan completed.")
+        username = input("Enter username: ")
+        check_username(username)
+    elif choice == "6":
+        mac = input("Enter MAC address: ")
+        print("MAC address lookup feature not implemented yet.")
+    elif choice == "7":
+        ip = input("Enter IP address: ")
+        reverse_ip_lookup(ip)
+    elif choice == "8":
+        domain = input("Enter domain: ")
+        whois_lookup(domain)
+    else:
+        print("Invalid choice. Please select again.")
 
 if __name__ == "__main__":
     main()
