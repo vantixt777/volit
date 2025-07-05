@@ -12,16 +12,16 @@ import time
 import concurrent.futures
 import whois
 
-# Initialize color output
+
 init(autoreset=True)
 
-# Define colors
+
 red = "\033[31m"
 reset = "\033[0m"
 yellow = "\033[93m"
 green = "\033[92m"
 
-# Function to print banner
+
 def print_banner():
     os.system("clear" if os.name == "posix" else "cls")
     interface = """
@@ -36,7 +36,7 @@ def print_banner():
     """
     print(Colorate.Horizontal(Colors.blue_to_purple, interface))
 
-# Function to print menu inside a box with the same color as the banner
+
 def print_menu():
     menu = Colorate.Horizontal(Colors.blue_to_purple, """
 ╔══════════════════════════════╗
@@ -56,7 +56,7 @@ def print_menu():
 """)
     print(menu)
 
-# Function to find email
+
 def find_email():
     first_name = input("Enter first name: ").strip().lower()
     last_name = input("Enter last name (optional): ").strip().lower()
@@ -74,7 +74,7 @@ def find_email():
     for email in emails:
         print(email)
 
-# Function to get IP information
+
 def get_ip_info(ip):
     try:
         url = f"http://ip-api.com/json/{ip}"
@@ -98,7 +98,7 @@ def get_ip_info(ip):
     except Exception as e:
         print(f"{red}Error fetching IP information: {e}{reset}")
 
-# Function to get phone number information
+
 def get_phone_info(phone):
     try:
         parsed_number = phonenumbers.parse(phone)
@@ -113,7 +113,7 @@ def get_phone_info(phone):
     except Exception as e:
         print(f"{red}Invalid phone number. Error: {e}{reset}")
 
-# Function to scan ports
+
 def scan_ports(ip, start_port=1, end_port=1024):
     print(f"Scanning {ip} from port {start_port} to {end_port}...")
     open_ports = []
@@ -131,7 +131,7 @@ def scan_ports(ip, start_port=1, end_port=1024):
     if not open_ports:
         print(f"{red}No open ports found.{reset}")
 
-# Reverse IP Lookup
+
 def reverse_ip_lookup(ip):
     url = f"https://api.hackertarget.com/reverseiplookup/?q={ip}"
     try:
@@ -140,7 +140,7 @@ def reverse_ip_lookup(ip):
     except requests.RequestException as e:
         print(f"{red}Error: {e}{reset}")
 
-# WHOIS Lookup
+
 def whois_lookup(domain):
     try:
         info = whois.whois(domain)
@@ -148,7 +148,7 @@ def whois_lookup(domain):
     except Exception as e:
         print(f"{red}Error fetching WHOIS data: {e}{reset}")
 
-# Function to check username availability
+
 def check_username(username):
     websites = {
         "GitHub": f"https://github.com/{username}",
